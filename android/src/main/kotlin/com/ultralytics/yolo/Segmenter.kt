@@ -22,6 +22,7 @@ import org.yaml.snakeyaml.Yaml
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
 import java.nio.MappedByteBuffer
+import kotlin.math.exp
 import kotlin.math.max
 import kotlin.math.min
 
@@ -384,29 +385,42 @@ class Segmenter(
         threshold: Float
     ): Pair<Bitmap?, List<List<List<Float>>>?> {
         if (detections.isEmpty()) return Pair(null, null)
-        val combinedPixels = IntArray(maskW * maskH) { Color.TRANSPARENT }
+
+        val totalPixels = maskW * maskH
+        val combinedPixels = IntArray(totalPixels) { Color.TRANSPARENT }
         val probabilityMasks = mutableListOf<List<List<Float>>>()
-        detections.forEachIndexed { detIndex, det ->
+
+        detections.forEach { det ->
+            // Scale detection box to proto mask coordinates and clamp to bounds
+            val boxX1 = (det.box.left * maskW).toInt().coerceIn(0, maskW - 1)
+            val boxY1 = (det.box.top * maskH).toInt().coerceIn(0, maskH - 1)
+            val boxX2 = (det.box.right * maskW).toInt().coerceIn(0, maskW - 1)
+            val boxY2 = (det.box.bottom * maskH).toInt().coerceIn(0, maskH - 1)
+
             val color = ultralyticsColors[det.cls % ultralyticsColors.size]
             val pm = Array(maskH) { FloatArray(maskW) }
+
             for (y in 0 until maskH) {
                 for (x in 0 until maskW) {
-                    var v = 0f
+                    var logit = 0f
                     for (c in 0 until maskConfidenceLength) {
-                        v += det.maskCoeffs[c] * protos[y][x][c]
+                        logit += det.maskCoeffs[c] * protos[y][x][c]
                     }
-                    pm[y][x] = v
-                }
-            }
-            for (y in 0 until maskH) {
-                for (x in 0 until maskW) {
-                    if (pm[y][x] > threshold) {
+                    // Sigmoid to convert logits to probabilities
+                    val prob = (1f / (1f + exp(-logit)))
+                    val insideBox = x in boxX1..boxX2 && y in boxY1..boxY2
+                    val maskedProb = if (insideBox) prob else 0f
+                    pm[y][x] = maskedProb
+
+                    if (insideBox && maskedProb > threshold) {
                         combinedPixels[y * maskW + x] = color
                     }
                 }
             }
+
             probabilityMasks.add(pm.map { it.toList() })
         }
+
         val bmp = Bitmap.createBitmap(maskW, maskH, Bitmap.Config.ARGB_8888)
         bmp.setPixels(combinedPixels, 0, maskW, 0, 0, maskW, maskH)
         return Pair(bmp, probabilityMasks)
