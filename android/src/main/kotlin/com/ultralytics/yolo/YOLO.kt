@@ -333,52 +333,6 @@ class YOLO(
             }
             YOLOTask.SEGMENT -> {
                 // Draw bounding boxes
-                for ((i, box) in result.boxes.withIndex()) {
-                    paint.color = ultralyticsColors[box.index % ultralyticsColors.size]
-
-                    // Transform coordinates
-                    val transformedRect = transformRect(box.xywh)
-                    // Draw rounded rectangle with corner radius
-                    val cornerRadius = 12f
-                    canvas.drawRoundRect(transformedRect, cornerRadius, cornerRadius, paint)
-
-                    // Draw label with background
-                    val labelText = "${box.cls} ${(box.conf * 100).toInt()}%"
-                    val labelPadding = 8f
-                    
-                    // Measure text
-                    val textBounds = Rect()
-                    paint.getTextBounds(labelText, 0, labelText.length, textBounds)
-                    
-                    // Calculate label size
-                    val labelWidth = textBounds.width() + labelPadding * 2
-                    val labelHeight = textBounds.height() + labelPadding * 2
-                    
-                    // Calculate smart label position
-                    val labelRect = calculateSmartLabelRect(
-                        transformedRect,
-                        labelWidth,
-                        labelHeight,
-                        output.width.toFloat(),
-                        output.height.toFloat()
-                    )
-                    
-                    // Draw label background
-                    paint.style = Paint.Style.FILL
-                    canvas.drawRoundRect(labelRect, cornerRadius, cornerRadius, paint)
-                    
-                    // Draw label text in white
-                    paint.color = Color.WHITE
-                    canvas.drawText(
-                        labelText,
-                        labelRect.left + labelPadding,
-                        labelRect.bottom - labelPadding,
-                        paint
-                    )
-                    
-                    // Reset paint style
-                    paint.style = Paint.Style.STROKE
-                }
 
                 // Overlay segmentation mask if available
                 result.masks?.combinedMask?.let { mask ->
